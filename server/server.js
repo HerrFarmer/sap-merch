@@ -11,7 +11,12 @@ const PORT = process.env.PORT || 3001;
 // Allow requests from any origin (lock down after deployment)
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:4173'];
+  : [
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'https://sap-merch-kcy1ta1kj-palz.vercel.app',
+      'https://sap-merch.vercel.app',
+    ];
 
 app.use(cors({
   origin: function(origin, callback) {
