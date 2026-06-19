@@ -119,7 +119,7 @@ export default function AdminPage() {
               <h1>Admin Dashboard — SAP Merch</h1>
               <p>Manage orders and export to Excel</p>
             </div>
-            <a href="/" className="btn btn-secondary btn-sm">← View Order Page</a>
+            <a href="#/" className="btn btn-secondary btn-sm">← View Order Page</a>
           </div>
         </div>
       </header>
