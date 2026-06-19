@@ -8,5 +8,12 @@ export default defineConfig({
       '/api': 'http://localhost:3001',
       '/images': 'http://localhost:3001',
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      }
+    }
   }
 })
