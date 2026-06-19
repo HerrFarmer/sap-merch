@@ -113,7 +113,7 @@ export default function App() {
             <div className="sap-logo">SAP</div>
             <div>
               <h1>Team Merch 2026</h1>
-              <p>Order your SAP SuccessFactors branded shirt</p>
+              <p>Order your SAP branded shirt</p>
             </div>
           </div>
         </div>

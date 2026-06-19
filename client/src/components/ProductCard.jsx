@@ -4,7 +4,6 @@ export default function ProductCard({ product, orderItems, onAddItem, onRemoveIt
   const [gender, setGender] = useState('mens')
   const [size, setSize] = useState('')
   const [qty, setQty] = useState(1)
-  const [showBranded, setShowBranded] = useState(true)
 
   const sizes = gender === 'mens' ? product.sizesMens : product.sizesWomens
   const productItems = orderItems.filter(i => i.product_id === product.id)
@@ -22,31 +21,16 @@ export default function ProductCard({ product, orderItems, onAddItem, onRemoveIt
     setQty(1)
   }
 
-  // Reset size when gender changes
   function handleGenderChange(g) {
     setGender(g)
     setSize('')
   }
 
-  const currentImage = showBranded
-    ? product.imageBranded
-    : gender === 'mens' ? product.imageMens : product.imageWomens
-
   return (
     <div className={`product-card ${productItems.length > 0 ? 'has-items' : ''}`}>
       <div className="product-image-wrap">
         <span className="product-badge">{product.type}</span>
-        <img src={currentImage} alt={product.name} />
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 10 }}>
-          <button
-            className={`btn btn-sm ${showBranded ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setShowBranded(true)}
-          >With Logo</button>
-          <button
-            className={`btn btn-sm ${!showBranded ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setShowBranded(false)}
-          >Garment</button>
-        </div>
+        <img src={product.imageBranded} alt={product.name} />
       </div>
 
       <div className="product-body">
