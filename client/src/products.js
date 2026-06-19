@@ -1,3 +1,5 @@
+const API = import.meta.env.VITE_API_URL || ''
+
 export const PRODUCTS = [
   {
     id: 'classic-tee',
@@ -8,10 +10,10 @@ export const PRODUCTS = [
     logo: 'Printed logo on left chest',
     description: 'Heavy weight 220 GSM, 100% combed cotton. Regular fit with neck ribbing, side seams and double needle hems. Pre-shrunk to minimise shrinkage.',
     color: 'Black',
-    imageBranded: '/images/tee-branded.png',
-    imageMens: '/images/tee-mens.jpg',
-    imageWomens: '/images/tee-womens.jpg',
-    sizesMens: ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+    imageBranded: `${API}/images/tee-branded.png`,
+    imageMens:    `${API}/images/tee-mens.jpg`,
+    imageWomens:  `${API}/images/tee-womens.jpg`,
+    sizesMens:   ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
     sizesWomens: ['XS', 'S', 'M', 'L', 'XL'],
   },
   {
@@ -23,10 +25,10 @@ export const PRODUCTS = [
     logo: 'Embroidered logo on left chest',
     description: '100% combed compact cotton, 200 g/m². Enzyme washed for a softer and smoother finish. Side slits with matching buttons.',
     color: 'Black',
-    imageBranded: '/images/polo-branded.png',
-    imageMens: '/images/polo-mens.jpg',
-    imageWomens: '/images/polo-womens.jpg',
-    sizesMens: ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
+    imageBranded: `${API}/images/polo-branded.png`,
+    imageMens:    `${API}/images/polo-mens.jpg`,
+    imageWomens:  `${API}/images/polo-womens.jpg`,
+    sizesMens:   ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'],
     sizesWomens: ['XS', 'S', 'M', 'L', 'XL'],
   },
 ]
