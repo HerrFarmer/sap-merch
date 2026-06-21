@@ -104,12 +104,12 @@ export default function App() {
     setStep('order')
   }
 
-  function handleKeepName() {
-    applyExistingUser(nameMismatch.pendingData, nameMismatch.storedName)
+  function handleKeepName(mismatch) {
+    applyExistingUser(mismatch.pendingData, mismatch.storedName)
   }
 
-  function handleUpdateName() {
-    applyExistingUser(nameMismatch.pendingData, nameMismatch.newName)
+  function handleUpdateName(mismatch) {
+    applyExistingUser(mismatch.pendingData, mismatch.newName)
   }
 
   function handleLoadOrder(order) {
@@ -185,29 +185,6 @@ export default function App() {
 
   return (
     <>
-      {/* Name mismatch dialog */}
-      {nameMismatch && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Name mismatch</h3>
-            <p style={{ fontSize: 14, color: '#555', marginBottom: 20, lineHeight: 1.6 }}>
-              The email <strong>{nameMismatch.pendingData.trimmedEmail}</strong> is already registered under the name <strong>{nameMismatch.storedName}</strong>,
-              but you entered <strong>{nameMismatch.newName}</strong>.
-            </p>
-            <p style={{ fontSize: 14, color: '#555', marginBottom: 24 }}>
-              Would you like to update the name to <strong>{nameMismatch.newName}</strong>?
-            </p>
-            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-              <button className="btn btn-secondary" onClick={handleKeepName}>
-                Keep "{nameMismatch.storedName}"
-              </button>
-              <button className="btn btn-primary" onClick={handleUpdateName}>
-                Update to "{nameMismatch.newName}"
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <header className="header">
         <div className="container">
           <div className="header-inner">
@@ -377,6 +354,30 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* Name mismatch dialog — rendered at top level to avoid z-index issues */}
+      {nameMismatch && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Name mismatch</h3>
+            <p style={{ fontSize: 14, color: '#555', marginBottom: 20, lineHeight: 1.6 }}>
+              The email <strong>{nameMismatch.pendingData.trimmedEmail}</strong> is already registered under the name <strong>{nameMismatch.storedName}</strong>,
+              but you entered <strong>{nameMismatch.newName}</strong>.
+            </p>
+            <p style={{ fontSize: 14, color: '#555', marginBottom: 24 }}>
+              Would you like to update the name to <strong>{nameMismatch.newName}</strong>?
+            </p>
+            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+              <button className="btn btn-secondary" onClick={() => handleKeepName(nameMismatch)}>
+                Keep "{nameMismatch.storedName}"
+              </button>
+              <button className="btn btn-primary" onClick={() => handleUpdateName(nameMismatch)}>
+                Update to "{nameMismatch.newName}"
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
