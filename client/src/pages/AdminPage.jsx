@@ -132,7 +132,7 @@ export default function AdminPage() {
             <>
               {/* Stats */}
               {stats && (
-                <div className="stats-row">
+                <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                   <div className="stat-card">
                     <div className="stat-num">{stats.totalOrders}</div>
                     <div className="stat-label">Total Orders</div>
@@ -142,15 +142,24 @@ export default function AdminPage() {
                     <div className="stat-label">Total Shirts</div>
                   </div>
                   <div className="stat-card">
-                    <div className="stat-num" style={{ fontSize: 18, paddingTop: 6 }}>
+                    <div style={{ paddingTop: 4 }}>
                       {stats.byProduct.map(p => (
-                        <div key={p.product_name} style={{ fontSize: 13, marginBottom: 2 }}>
-                          <strong>{p.total}</strong> × {p.product_name}
+                        <div key={p.product_name} style={{ fontSize: 13, marginBottom: 6 }}>
+                          <div style={{ fontWeight: 700, color: '#0070c0' }}>{p.product_name}</div>
+                          <div style={{ color: '#444' }}>{p.total} shirts · <strong>${p.total_value.toFixed(2)}</strong></div>
+                          <div style={{ fontSize: 11, color: '#999' }}>${p.unit_price.toFixed(2)} each</div>
                         </div>
                       ))}
-                      {stats.byProduct.length === 0 && '—'}
+                      {stats.byProduct.length === 0 && <span style={{ fontSize: 14, color: '#999' }}>—</span>}
                     </div>
-                    <div className="stat-label">By Product</div>
+                    <div className="stat-label" style={{ marginTop: 8 }}>By Product</div>
+                  </div>
+                  <div className="stat-card" style={{ background: '#f0f7ff', border: '2px solid #c3d4fb' }}>
+                    <div className="stat-num" style={{ color: '#0070c0' }}>
+                      ${(stats.totalValue ?? 0).toFixed(2)}
+                    </div>
+                    <div className="stat-label">Total Order Value</div>
+                    <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>ex GST · ex delivery</div>
                   </div>
                 </div>
               )}

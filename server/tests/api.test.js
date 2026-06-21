@@ -174,5 +174,8 @@ describe('Admin', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('totalOrders');
     expect(res.body).toHaveProperty('totalItems');
+    expect(res.body).toHaveProperty('totalValue');
+    expect(res.body).toHaveProperty('byProduct');
+    expect(typeof res.body.totalValue).toBe('number');
   });
 });

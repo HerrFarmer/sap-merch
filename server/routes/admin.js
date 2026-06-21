@@ -159,12 +159,20 @@ router.get('/export', auth, async (req, res) => {
 
 // GET /api/admin/stats
 router.get('/stats', auth, (req, res) => {
+  const PRICES = { 'Classic Tee': 20.85, 'Neptune Polo': 29.35 };
+
   const totalOrders = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
   const totalItems  = db.prepare('SELECT COALESCE(SUM(quantity),0) as count FROM order_items').get().count;
   const byProduct   = db.prepare(`
     SELECT product_name, SUM(quantity) as total FROM order_items GROUP BY product_name
-  `).all();
-  res.json({ totalOrders, totalItems, byProduct });
+  `).all().map(p => ({
+    ...p,
+    unit_price:  PRICES[p.product_name] ?? 0,
+    total_value: (PRICES[p.product_name] ?? 0) * p.total,
+  }));
+
+  const totalValue = byProduct.reduce((sum, p) => sum + p.total_value, 0);
+  res.json({ totalOrders, totalItems, byProduct, totalValue });
 });
 
 module.exports = router;
