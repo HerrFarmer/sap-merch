@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import Lightbox from './Lightbox'
 
 export default function ProductCard({ product, orderItems, onAddItem, onRemoveItem, disabled }) {
   const [gender, setGender] = useState('mens')
   const [size, setSize] = useState('')
   const [qty, setQty] = useState(1)
+  const [lightbox, setLightbox] = useState(null) // null | { src, alt }
 
   const sizes = gender === 'mens' ? product.sizesMens : product.sizesWomens
   const productItems = orderItems.filter(i => i.product_id === product.id)
@@ -26,12 +28,27 @@ export default function ProductCard({ product, orderItems, onAddItem, onRemoveIt
     setSize('')
   }
 
+  const lightboxSrc = gender === 'mens' ? product.imageMens : product.imageWomens
+
   return (
-    <div className={`product-card ${productItems.length > 0 ? 'has-items' : ''}`}>
-      <div className="product-image-wrap">
-        <span className="product-badge">{product.type}</span>
-        <img src={product.imageBranded} alt={product.name} />
-      </div>
+    <>
+      {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
+      <div className={`product-card ${productItems.length > 0 ? 'has-items' : ''}`}>
+        <div
+          className="product-image-wrap"
+          style={{ cursor: 'zoom-in', position: 'relative' }}
+          onClick={() => setLightbox({ src: product.imageBranded, alt: `${product.name} (branded)` })}
+          title="Click to enlarge"
+        >
+          <span className="product-badge">{product.type}</span>
+          <img src={product.imageBranded} alt={product.name} />
+          <div style={{
+            position: 'absolute', bottom: 8, right: 8,
+            background: 'rgba(0,0,0,0.45)', color: '#fff',
+            borderRadius: 6, padding: '3px 7px', fontSize: 11,
+            pointerEvents: 'none',
+          }}>🔍 enlarge</div>
+        </div>
 
       <div className="product-body">
         <div className="product-name">{product.name}</div>
@@ -117,5 +134,6 @@ export default function ProductCard({ product, orderItems, onAddItem, onRemoveIt
         )}
       </div>
     </div>
+    </>
   )
 }
