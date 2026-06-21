@@ -19,7 +19,7 @@ export default function App() {
   const [step, setStep] = useState('name') // 'name' | 'order' | 'done'
   const [prevOrders, setPrevOrders] = useState([])
   const [loadingLookup, setLoadingLookup] = useState(false)
-  const [editingOrderId, setEditingOrderId] = useState(null)
+  const [nameMismatch, setNameMismatch] = useState(null) // { storedName, newName, pendingData }
 
   async function handleNameSubmit(e) {
     e.preventDefault()
@@ -32,7 +32,6 @@ export default function App() {
       setEmailError('Email address must end with @sap.com')
       return
     }
-    // Basic format check
     const emailRegex = /^[^\s@]+@sap\.com$/
     if (!emailRegex.test(trimmedEmail)) {
       setEmailError('Please enter a valid @sap.com email address')
@@ -41,42 +40,76 @@ export default function App() {
 
     setEmailError('')
     setLoadingLookup(true)
+    let settings, existingByEmail
     try {
-      const [settings, existingByEmail] = await Promise.all([
+      ;[settings, existingByEmail] = await Promise.all([
         api.getSettings(),
         api.lookupOrders(null, trimmedEmail),
       ])
-      setOrderingOpen(settings.ordering_open)
-      setName(trimmedName)
-      setEmail(trimmedEmail)
-
-      if (existingByEmail.length > 0) {
-        // Existing user — auto-load their most recent order into the cart
-        const latest = existingByEmail[0]
-        setOrderItems(latest.items.map(i => ({
-          product_id: i.product_id,
-          product_name: i.product_name,
-          gender: i.gender,
-          size: i.size,
-          quantity: i.quantity,
-        })))
-        setNotes(latest.notes || '')
-        setEditingOrderId(latest.id)
-        setPrevOrders(existingByEmail.length > 1 ? existingByEmail.slice(1) : [])
-      } else {
-        // New user
-        setOrderItems([])
-        setNotes('')
-        setEditingOrderId(null)
-        setPrevOrders([])
-      }
     } catch (err) {
       setEmailError('Something went wrong. Please try again.')
       setLoadingLookup(false)
       return
     }
     setLoadingLookup(false)
+
+    if (existingByEmail.length > 0) {
+      const latest       = existingByEmail[0]
+      const storedName   = latest.name
+      const nameChanged  = storedName.toLowerCase() !== trimmedName.toLowerCase()
+
+      const pendingData = {
+        settings,
+        existingByEmail,
+        trimmedEmail,
+        trimmedName,
+      }
+
+      if (nameChanged) {
+        // Pause and ask the user whether to update the name
+        setNameMismatch({ storedName, newName: trimmedName, pendingData })
+        return
+      }
+      applyExistingUser(pendingData, trimmedName)
+    } else {
+      // Brand-new user
+      setOrderingOpen(settings.ordering_open)
+      setName(trimmedName)
+      setEmail(trimmedEmail)
+      setOrderItems([])
+      setNotes('')
+      setEditingOrderId(null)
+      setPrevOrders([])
+      setStep('order')
+    }
+  }
+
+  function applyExistingUser(pendingData, resolvedName) {
+    const { settings, existingByEmail, trimmedEmail } = pendingData
+    const latest = existingByEmail[0]
+    setOrderingOpen(settings.ordering_open)
+    setName(resolvedName)
+    setEmail(trimmedEmail)
+    setOrderItems(latest.items.map(i => ({
+      product_id:   i.product_id,
+      product_name: i.product_name,
+      gender:       i.gender,
+      size:         i.size,
+      quantity:     i.quantity,
+    })))
+    setNotes(latest.notes || '')
+    setEditingOrderId(latest.id)
+    setPrevOrders(existingByEmail.length > 1 ? existingByEmail.slice(1) : [])
+    setNameMismatch(null)
     setStep('order')
+  }
+
+  function handleKeepName() {
+    applyExistingUser(nameMismatch.pendingData, nameMismatch.storedName)
+  }
+
+  function handleUpdateName() {
+    applyExistingUser(nameMismatch.pendingData, nameMismatch.newName)
   }
 
   function handleLoadOrder(order) {
@@ -147,11 +180,34 @@ export default function App() {
     setName(''); setNameInput(''); setEmail(''); setEmailInput(''); setEmailError('')
     setOrderItems([]); setNotes('')
     setSubmitted(null); setEditingOrderId(null); setError('')
-    setPrevOrders([]); setStep('name')
+    setPrevOrders([]); setNameMismatch(null); setStep('name')
   }
 
   return (
     <>
+      {/* Name mismatch dialog */}
+      {nameMismatch && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Name mismatch</h3>
+            <p style={{ fontSize: 14, color: '#555', marginBottom: 20, lineHeight: 1.6 }}>
+              The email <strong>{nameMismatch.pendingData.trimmedEmail}</strong> is already registered under the name <strong>{nameMismatch.storedName}</strong>,
+              but you entered <strong>{nameMismatch.newName}</strong>.
+            </p>
+            <p style={{ fontSize: 14, color: '#555', marginBottom: 24 }}>
+              Would you like to update the name to <strong>{nameMismatch.newName}</strong>?
+            </p>
+            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+              <button className="btn btn-secondary" onClick={handleKeepName}>
+                Keep "{nameMismatch.storedName}"
+              </button>
+              <button className="btn btn-primary" onClick={handleUpdateName}>
+                Update to "{nameMismatch.newName}"
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="header">
         <div className="container">
           <div className="header-inner">
