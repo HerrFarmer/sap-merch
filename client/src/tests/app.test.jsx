@@ -9,19 +9,21 @@ vi.mock('../api', () => ({
     getSettings:  vi.fn().mockResolvedValue({ ordering_open: true }),
     lookupOrders: vi.fn().mockResolvedValue([]),
     createOrder:  vi.fn().mockResolvedValue({
-      id: 42, name: 'Test User', email: 'test@sap.com',
+      id: 42, name: 'Alexander Bauer', email: 'alexander.bauer@sap.com',
       items: [{ product_id: 'classic-tee', product_name: 'Classic Tee', gender: 'mens', size: 'L', quantity: 1 }],
       notes: null,
     }),
-    updateOrder: vi.fn().mockResolvedValue({ id: 42, name: 'Test User', email: 'test@sap.com', items: [], notes: null }),
+    updateOrder: vi.fn().mockResolvedValue({
+      id: 42, name: 'Alexander Bauer', email: 'alexander.bauer@sap.com', items: [], notes: null,
+    }),
   },
 }))
 
 import App from '../App'
 import { api } from '../api'
 import OrderSummary from '../components/OrderSummary'
-import ProductCard   from '../components/ProductCard'
-import { PRODUCTS }  from '../products'
+import ProductCard  from '../components/ProductCard'
+import { PRODUCTS } from '../products'
 
 function renderApp() {
   return render(<HashRouter><App /></HashRouter>)
@@ -29,11 +31,10 @@ function renderApp() {
 
 // ── Email validation ──────────────────────────────────────────────────────
 describe('Email validation', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => vi.clearAllMocks())
 
   test('rejects email without @sap.com', async () => {
     renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'Test User')
     await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'test@gmail.com')
     fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
     await waitFor(() =>
@@ -43,7 +44,6 @@ describe('Email validation', () => {
 
   test('rejects email with invalid format', async () => {
     renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'Test User')
     await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), '@sap.com')
     fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
     await waitFor(() =>
@@ -51,73 +51,55 @@ describe('Email validation', () => {
     )
   })
 
-  test('accepts valid @sap.com email and proceeds', async () => {
+  test('accepts valid @sap.com email and proceeds to order page', async () => {
     renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'Test User')
-    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'test@sap.com')
+    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'alexander.bauer@sap.com')
     fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
     await waitFor(() =>
-      expect(screen.getByText(/Hi, Test User/i)).toBeInTheDocument()
+      expect(screen.getByText(/Hi, Alexander Bauer/i)).toBeInTheDocument()
+    )
+  })
+
+  test('derives display name correctly from email', async () => {
+    renderApp()
+    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'john.doe@sap.com')
+    fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/Hi, John Doe/i)).toBeInTheDocument()
     )
   })
 })
 
-// ── Name mismatch dialog ──────────────────────────────────────────────────
-describe('Name mismatch dialog', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+// ── Returning user ────────────────────────────────────────────────────────
+describe('Returning user', () => {
+  beforeEach(() => vi.clearAllMocks())
 
-  test('shows dialog when email exists with different name', async () => {
+  test('loads existing order when email is found', async () => {
     api.lookupOrders.mockResolvedValueOnce([{
-      id: 1, name: 'Original Name', email: 'test@sap.com',
-      items: [], notes: null, submitted_at: new Date().toISOString(),
+      id: 5, name: 'Alexander Bauer', email: 'alexander.bauer@sap.com',
+      items: [{ product_id: 'classic-tee', product_name: 'Classic Tee', gender: 'mens', size: 'XL', quantity: 2 }],
+      notes: null, submitted_at: new Date().toISOString(),
     }])
 
     renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'New Name')
-    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'test@sap.com')
+    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'alexander.bauer@sap.com')
     fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
 
     await waitFor(() =>
-      expect(screen.getByText(/Name mismatch/i)).toBeInTheDocument()
+      expect(screen.getByText(/Welcome back/i)).toBeInTheDocument()
     )
-    expect(screen.getAllByText(/Original Name/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/New Name/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Editing your existing order #5/i)).toBeInTheDocument()
   })
 
-  test('"Keep" button proceeds with stored name', async () => {
-    api.lookupOrders.mockResolvedValueOnce([{
-      id: 1, name: 'Original Name', email: 'test@sap.com',
-      items: [], notes: null, submitted_at: new Date().toISOString(),
-    }])
-
+  test('new user sees empty cart (no welcome back banner)', async () => {
     renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'New Name')
-    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'test@sap.com')
+    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'new.user@sap.com')
     fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
-    await waitFor(() => screen.getByText(/Name mismatch/i))
 
-    await userEvent.click(screen.getByRole('button', { name: /Keep "Original Name"/i }))
     await waitFor(() =>
-      expect(screen.getByText(/Hi, Original Name/i)).toBeInTheDocument()
+      expect(screen.getByText(/Hi, New User/i)).toBeInTheDocument()
     )
-  })
-
-  test('"Update" button proceeds with new name', async () => {
-    api.lookupOrders.mockResolvedValueOnce([{
-      id: 1, name: 'Original Name', email: 'test@sap.com',
-      items: [], notes: null, submitted_at: new Date().toISOString(),
-    }])
-
-    renderApp()
-    await userEvent.type(screen.getByPlaceholderText('Your full name'), 'New Name')
-    await userEvent.type(screen.getByPlaceholderText('your.name@sap.com'), 'test@sap.com')
-    fireEvent.submit(screen.getByRole('button', { name: /continue/i }))
-    await waitFor(() => screen.getByText(/Name mismatch/i))
-
-    await userEvent.click(screen.getByRole('button', { name: /Update to "New Name"/i }))
-    await waitFor(() =>
-      expect(screen.getByText(/Hi, New Name/i)).toBeInTheDocument()
-    )
+    expect(screen.queryByText(/Welcome back/i)).not.toBeInTheDocument()
   })
 })
 
@@ -130,62 +112,49 @@ describe('OrderSummary', () => {
   const noop = vi.fn()
 
   test('renders all items', () => {
-    render(
-      <OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />
-    )
+    render(<OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />)
     expect(screen.getByText(/Classic Tee/)).toBeInTheDocument()
     expect(screen.getByText(/Neptune Polo/)).toBeInTheDocument()
   })
 
   test('shows correct estimated total', () => {
-    render(
-      <OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />
-    )
+    render(<OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />)
     // 2 × $20.85 + 1 × $29.35 = $71.05
     expect(screen.getByText('$71.05')).toBeInTheDocument()
   })
 
   test('shows empty state when no items', () => {
-    render(
-      <OrderSummary items={[]} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />
-    )
+    render(<OrderSummary items={[]} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />)
     expect(screen.getByText(/No items added yet/i)).toBeInTheDocument()
   })
 
   test('calls onRemoveItem when × clicked', async () => {
     const onRemove = vi.fn()
-    render(
-      <OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={onRemove} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />
-    )
-    const removeButtons = screen.getAllByText('×')
-    await userEvent.click(removeButtons[0])
+    render(<OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={onRemove} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />)
+    await userEvent.click(screen.getAllByText('×')[0])
     expect(onRemove).toHaveBeenCalledWith(0)
   })
 
   test('submit button disabled when no items', () => {
-    render(
-      <OrderSummary items={[]} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />
-    )
+    render(<OrderSummary items={[]} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={false} />)
     expect(screen.getByRole('button', { name: /submit order/i })).toBeDisabled()
   })
 
   test('submit button shows "Update Order" in edit mode', () => {
-    render(
-      <OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
-        onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={true} />
-    )
+    render(<OrderSummary items={items} name="Test" notes="" onNotesChange={noop}
+      onRemoveItem={noop} onSubmit={noop} submitting={false} disabled={false} isEdit={true} />)
     expect(screen.getByRole('button', { name: /update order/i })).toBeInTheDocument()
   })
 })
 
 // ── ProductCard ───────────────────────────────────────────────────────────
 describe('ProductCard', () => {
-  const product = PRODUCTS[0] // Classic Tee
+  const product = PRODUCTS[0]
   const noop = vi.fn()
 
   test('renders product name and price', () => {
@@ -204,7 +173,6 @@ describe('ProductCard', () => {
     render(<ProductCard product={product} orderItems={[]} onAddItem={noop} onRemoveItem={noop} disabled={false} />)
     await userEvent.click(screen.getByRole('button', { name: "Women's" }))
     expect(screen.getByRole('button', { name: 'XS' })).toBeInTheDocument()
-    // 5XL is mens-only, should not appear
     expect(screen.queryByRole('button', { name: '5XL' })).not.toBeInTheDocument()
   })
 
@@ -214,16 +182,12 @@ describe('ProductCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'L' }))
     await userEvent.click(screen.getByRole('button', { name: /Add.*L/i }))
     expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({
-      product_id: 'classic-tee',
-      gender: 'mens',
-      size: 'L',
-      quantity: 1,
+      product_id: 'classic-tee', gender: 'mens', size: 'L', quantity: 1,
     }))
   })
 
   test('Add button disabled when ordering is disabled', () => {
     render(<ProductCard product={product} orderItems={[]} onAddItem={noop} onRemoveItem={noop} disabled={true} />)
-    const addBtn = screen.getByRole('button', { name: /select a size/i })
-    expect(addBtn).toBeDisabled()
+    expect(screen.getByRole('button', { name: /select a size/i })).toBeDisabled()
   })
 })

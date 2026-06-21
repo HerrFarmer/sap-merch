@@ -4,10 +4,18 @@ import { api } from './api'
 import ProductCard from './components/ProductCard'
 import OrderSummary from './components/OrderSummary'
 
+// Derive a friendly display name from an email address
+// "alexander.bauer@sap.com" → "Alexander Bauer"
+function displayNameFromEmail(email) {
+  const local = email.split('@')[0]
+  return local
+    .split(/[._-]/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
 export default function App() {
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [nameInput, setNameInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
   const [emailError, setEmailError] = useState('')
   const [orderItems, setOrderItems] = useState([])
@@ -16,17 +24,15 @@ export default function App() {
   const [submitted, setSubmitted] = useState(null)
   const [error, setError] = useState('')
   const [orderingOpen, setOrderingOpen] = useState(true)
-  const [step, setStep] = useState('name') // 'name' | 'order' | 'done'
-  const [prevOrders, setPrevOrders] = useState([])
+  const [step, setStep] = useState('login') // 'login' | 'order' | 'done'
   const [loadingLookup, setLoadingLookup] = useState(false)
   const [editingOrderId, setEditingOrderId] = useState(null)
-  const [nameMismatch, setNameMismatch] = useState(null) // { storedName, newName, pendingData }
 
-  async function handleNameSubmit(e) {
+  const displayName = displayNameFromEmail(email)
+
+  async function handleEmailSubmit(e) {
     e.preventDefault()
-    const trimmedName  = nameInput.trim()
     const trimmedEmail = emailInput.trim().toLowerCase()
-    if (!trimmedName) return
 
     // Validate @sap.com
     if (!trimmedEmail.endsWith('@sap.com')) {
@@ -47,84 +53,35 @@ export default function App() {
         api.getSettings(),
         api.lookupOrders(null, trimmedEmail),
       ])
-    } catch (err) {
+    } catch {
       setEmailError('Something went wrong. Please try again.')
       setLoadingLookup(false)
       return
     }
     setLoadingLookup(false)
 
+    setEmail(trimmedEmail)
+    setOrderingOpen(settings.ordering_open)
+
     if (existingByEmail.length > 0) {
-      const latest       = existingByEmail[0]
-      const storedName   = latest.name
-      const nameChanged  = storedName.toLowerCase() !== trimmedName.toLowerCase()
-
-      const pendingData = {
-        settings,
-        existingByEmail,
-        trimmedEmail,
-        trimmedName,
-      }
-
-      if (nameChanged) {
-        // Pause and ask the user whether to update the name
-        setNameMismatch({ storedName, newName: trimmedName, pendingData })
-        return
-      }
-      applyExistingUser(pendingData, trimmedName)
+      // Returning user — load their most recent order
+      const latest = existingByEmail[0]
+      setOrderItems(latest.items.map(i => ({
+        product_id:   i.product_id,
+        product_name: i.product_name,
+        gender:       i.gender,
+        size:         i.size,
+        quantity:     i.quantity,
+      })))
+      setNotes(latest.notes || '')
+      setEditingOrderId(latest.id)
     } else {
-      // Brand-new user
-      setOrderingOpen(settings.ordering_open)
-      setName(trimmedName)
-      setEmail(trimmedEmail)
+      // New user
       setOrderItems([])
       setNotes('')
       setEditingOrderId(null)
-      setPrevOrders([])
-      setStep('order')
     }
-  }
-
-  function applyExistingUser(pendingData, resolvedName) {
-    const { settings, existingByEmail, trimmedEmail } = pendingData
-    const latest = existingByEmail[0]
-    setOrderingOpen(settings.ordering_open)
-    setName(resolvedName)
-    setEmail(trimmedEmail)
-    setOrderItems(latest.items.map(i => ({
-      product_id:   i.product_id,
-      product_name: i.product_name,
-      gender:       i.gender,
-      size:         i.size,
-      quantity:     i.quantity,
-    })))
-    setNotes(latest.notes || '')
-    setEditingOrderId(latest.id)
-    setPrevOrders(existingByEmail.length > 1 ? existingByEmail.slice(1) : [])
-    setNameMismatch(null)
     setStep('order')
-  }
-
-  function handleKeepName(mismatch) {
-    applyExistingUser(mismatch.pendingData, mismatch.storedName)
-  }
-
-  function handleUpdateName(mismatch) {
-    applyExistingUser(mismatch.pendingData, mismatch.newName)
-  }
-
-  function handleLoadOrder(order) {
-    setOrderItems(order.items.map(i => ({
-      product_id: i.product_id,
-      product_name: i.product_name,
-      gender: i.gender,
-      size: i.size,
-      quantity: i.quantity,
-    })))
-    setNotes(order.notes || '')
-    setEmail(order.email || '')
-    setEditingOrderId(order.id)
-    setPrevOrders([])
   }
 
   function addItem(item) {
@@ -153,7 +110,7 @@ export default function App() {
     setError('')
     setSubmitting(true)
     try {
-      const payload = { name, email, notes, items: orderItems }
+      const payload = { name: displayName, email, notes, items: orderItems }
       let result
       if (editingOrderId) {
         result = await api.updateOrder(editingOrderId, payload)
@@ -178,10 +135,10 @@ export default function App() {
   }
 
   function restart() {
-    setName(''); setNameInput(''); setEmail(''); setEmailInput(''); setEmailError('')
+    setEmail(''); setEmailInput(''); setEmailError('')
     setOrderItems([]); setNotes('')
     setSubmitted(null); setEditingOrderId(null); setError('')
-    setPrevOrders([]); setNameMismatch(null); setStep('name')
+    setStep('login')
   }
 
   return (
@@ -198,7 +155,7 @@ export default function App() {
         </div>
       </header>
 
-      {!orderingOpen && (
+      {!orderingOpen && step !== 'login' && (
         <div className="closed-banner">
           🔒 Ordering is currently closed. Contact your administrator for more information.
         </div>
@@ -207,30 +164,20 @@ export default function App() {
       <main className="main">
         <div className="container">
 
-          {/* Step 1: Enter name */}
-          {step === 'name' && (
+          {/* Step 1: Email login */}
+          {step === 'login' && (
             <div>
               <div className="name-card">
-                <h2>Welcome! Let's get you started.</h2>
-                <p>Enter your name and SAP email to begin your order.</p>
-                <form onSubmit={handleNameSubmit}>
-                  <div style={{ marginBottom: 12 }}>
-                    <input
-                      type="text"
-                      placeholder="Your full name"
-                      value={nameInput}
-                      onChange={e => setNameInput(e.target.value)}
-                      autoFocus
-                      required
-                      style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #dde2ea', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
-                    />
-                  </div>
+                <h2>Welcome!</h2>
+                <p>Enter your SAP email address to start or continue your order.</p>
+                <form onSubmit={handleEmailSubmit}>
                   <div style={{ marginBottom: 12 }}>
                     <input
                       type="email"
                       placeholder="your.name@sap.com"
                       value={emailInput}
                       onChange={e => { setEmailInput(e.target.value); setEmailError('') }}
+                      autoFocus
                       required
                       style={{ width: '100%', padding: '10px 14px', border: `1.5px solid ${emailError ? '#dc3545' : '#dde2ea'}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
                     />
@@ -249,8 +196,8 @@ export default function App() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 22, fontWeight: 700 }}>Hi, {name}! 👋</h2>
-                  <p style={{ fontSize: 14, color: '#666', marginTop: 2 }}>{email}</p>
+                  <h2 style={{ fontSize: 22, fontWeight: 700 }}>Hi, {displayName}! 👋</h2>
+                  <p style={{ fontSize: 14, color: '#888', marginTop: 2 }}>{email}</p>
                   <p style={{ fontSize: 14, color: editingOrderId ? '#0070c0' : '#666', marginTop: 2, fontWeight: editingOrderId ? 600 : 400 }}>
                     {editingOrderId ? `✏️ Editing your existing order #${editingOrderId}` : 'New order — select your items below'}
                   </p>
@@ -258,7 +205,6 @@ export default function App() {
                 <button className="btn btn-secondary btn-sm" onClick={restart}>← Back</button>
               </div>
 
-              {/* Welcome back notice for existing users */}
               {editingOrderId && (
                 <div style={{ background: '#e8f0fe', border: '1.5px solid #c3d4fb', borderRadius: 10, padding: '14px 18px', marginBottom: 24 }}>
                   <p style={{ fontSize: 14, color: '#1a56db', fontWeight: 600, marginBottom: 4 }}>
@@ -298,12 +244,10 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-
-                {/* Sticky cart */}
                 <div style={{ position: 'sticky', top: 20 }}>
                   <OrderSummary
                     items={orderItems}
-                    name={name}
+                    name={displayName}
                     notes={notes}
                     onNotesChange={setNotes}
                     onRemoveItem={removeItem}
@@ -323,18 +267,16 @@ export default function App() {
               <div className="success-card">
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
                 <h2>{editingOrderId ? 'Order Updated!' : 'Order Submitted!'}</h2>
-                <p>Thank you, <strong>{submitted.name}</strong>. Your order has been {editingOrderId ? 'updated' : 'received'}.</p>
+                <p>Thank you, <strong>{displayName}</strong>. Your order has been {editingOrderId ? 'updated' : 'received'}.</p>
                 <div className="success-ref">Order #{submitted.id}</div>
                 <p style={{ fontSize: 13, marginBottom: 24 }}>
-                  Keep this reference number. You can use your name to look up and edit your order later.
+                  Use your email address to look up and edit your order later.
                 </p>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary" onClick={startNewOrder}>+ Place Another Order</button>
                   <button className="btn btn-primary" onClick={restart}>Back to Start</button>
                 </div>
               </div>
-
-              {/* Show order summary */}
               <div style={{ marginTop: 32 }}>
                 <p className="section-title">Your Order Summary</p>
                 <div className="order-summary">
@@ -355,30 +297,6 @@ export default function App() {
           )}
         </div>
       </main>
-
-      {/* Name mismatch dialog — rendered at top level to avoid z-index issues */}
-      {nameMismatch && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>Name mismatch</h3>
-            <p style={{ fontSize: 14, color: '#555', marginBottom: 20, lineHeight: 1.6 }}>
-              The email <strong>{nameMismatch.pendingData.trimmedEmail}</strong> is already registered under the name <strong>{nameMismatch.storedName}</strong>,
-              but you entered <strong>{nameMismatch.newName}</strong>.
-            </p>
-            <p style={{ fontSize: 14, color: '#555', marginBottom: 24 }}>
-              Would you like to update the name to <strong>{nameMismatch.newName}</strong>?
-            </p>
-            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-              <button className="btn btn-secondary" onClick={() => handleKeepName(nameMismatch)}>
-                Keep "{nameMismatch.storedName}"
-              </button>
-              <button className="btn btn-primary" onClick={() => handleUpdateName(nameMismatch)}>
-                Update to "{nameMismatch.newName}"
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

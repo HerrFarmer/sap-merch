@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { PRODUCTS } from '../products'
 
+function displayNameFromEmail(email) {
+  const local = (email || '').split('@')[0]
+  return local.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
 export default function AdminOrderModal({ order, onSave, onClose }) {
-  const [name, setName] = useState(order.name)
   const [email, setEmail] = useState(order.email || '')
   const [notes, setNotes] = useState(order.notes || '')
   const [items, setItems] = useState(order.items.map(i => ({ ...i })))
@@ -53,7 +57,7 @@ export default function AdminOrderModal({ order, onSave, onClose }) {
   async function handleSave() {
     if (items.length === 0) { alert('At least one item required.'); return }
     setSaving(true)
-    await onSave(order.id, { name, email, notes, items })
+    await onSave(order.id, { name: displayNameFromEmail(email), email, notes, items })
     setSaving(false)
   }
 
@@ -63,11 +67,8 @@ export default function AdminOrderModal({ order, onSave, onClose }) {
         <h3>Edit Order #{order.id}</h3>
 
         <div className="form-row">
-          <label className="form-label">Name</label>
-          <input className="form-input" value={name} onChange={e => setName(e.target.value)} />
-        </div>
-        <div className="form-row">
-          <label className="form-label">Email (optional)</label>
+          <label className="form-label">Email</label>
+          <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} />
           <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </div>
 
