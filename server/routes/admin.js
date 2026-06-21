@@ -1,178 +1,180 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
 const ExcelJS = require('exceljs');
+const { query, insert, getSetting, setSetting } = require('../db');
 
-// Simple password check middleware
-function auth(req, res, next) {
+async function auth(req, res, next) {
   const pw = req.headers['x-admin-password'];
-  const stored = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get();
-  if (!pw || pw !== stored.value) return res.status(401).json({ error: 'Unauthorized' });
+  const stored = await getSetting('admin_password');
+  if (!pw || pw !== stored) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
 
 // POST /api/admin/login
-router.post('/login', (req, res) => {
-  const { password } = req.body;
-  const stored = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get();
-  if (password === stored.value) return res.json({ ok: true });
-  res.status(401).json({ error: 'Wrong password' });
+router.post('/login', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const stored = await getSetting('admin_password');
+    if (password === stored) return res.json({ ok: true });
+    res.status(401).json({ error: 'Wrong password' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/admin/orders
-router.get('/orders', auth, (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders ORDER BY submitted_at DESC').all();
-  const result = orders.map(o => ({
-    ...o,
-    items: db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id)
-  }));
-  res.json(result);
+router.get('/orders', auth, async (req, res) => {
+  try {
+    const orders = (await query('SELECT * FROM orders ORDER BY submitted_at DESC')).rows;
+    const result = await Promise.all(orders.map(async o => ({
+      ...o,
+      items: (await query('SELECT * FROM order_items WHERE order_id = $1', [o.id])).rows,
+    })));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /api/admin/orders/:id — admin edit
-router.put('/orders/:id', auth, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!order) return res.status(404).json({ error: 'Not found' });
+// PUT /api/admin/orders/:id
+router.put('/orders/:id', auth, async (req, res) => {
+  try {
+    const existing = (await query('SELECT * FROM orders WHERE id = $1', [req.params.id])).rows[0];
+    if (!existing) return res.status(404).json({ error: 'Not found' });
 
-  const { name, email, notes, items } = req.body;
-
-  const run = db.transaction(() => {
-    db.prepare("UPDATE orders SET name = ?, email = ?, notes = ?, updated_at = datetime('now') WHERE id = ?")
-      .run(name || order.name, email ?? order.email, notes ?? order.notes, order.id);
+    const { name, email, notes, items } = req.body;
+    await query(
+      `UPDATE orders SET name=$1, email=$2, notes=$3, updated_at=NOW() WHERE id=$4`,
+      [name || existing.name, email ?? existing.email, notes ?? existing.notes, existing.id]
+    );
     if (items) {
-      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(order.id);
-      const insertItem = db.prepare(
-        'INSERT INTO order_items (order_id, product_id, product_name, gender, size, quantity) VALUES (?, ?, ?, ?, ?, ?)'
-      );
+      await query('DELETE FROM order_items WHERE order_id = $1', [existing.id]);
       for (const item of items) {
-        insertItem.run(order.id, item.product_id, item.product_name, item.gender, item.size, item.quantity);
+        await insert(
+          `INSERT INTO order_items (order_id, product_id, product_name, gender, size, quantity)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+          [existing.id, item.product_id, item.product_name, item.gender, item.size, item.quantity]
+        );
       }
     }
-  });
-  run();
-
-  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
-  updated.items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-  res.json(updated);
+    const order = (await query('SELECT * FROM orders WHERE id = $1', [existing.id])).rows[0];
+    order.items = (await query('SELECT * FROM order_items WHERE order_id = $1', [existing.id])).rows;
+    res.json(order);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/admin/orders/:id
-router.delete('/orders/:id', auth, (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-  if (!order) return res.status(404).json({ error: 'Not found' });
-  db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
+router.delete('/orders/:id', auth, async (req, res) => {
+  try {
+    const existing = (await query('SELECT * FROM orders WHERE id = $1', [req.params.id])).rows[0];
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    await query('DELETE FROM orders WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/admin/settings
-router.get('/settings', auth, (req, res) => {
-  const open = db.prepare("SELECT value FROM settings WHERE key = 'ordering_open'").get();
-  res.json({ ordering_open: open.value === 'true' });
+router.get('/settings', auth, async (req, res) => {
+  try {
+    const val = await getSetting('ordering_open');
+    res.json({ ordering_open: val === 'true' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PUT /api/admin/settings
-router.put('/settings', auth, (req, res) => {
-  const { ordering_open } = req.body;
-  if (typeof ordering_open === 'boolean') {
-    db.prepare("UPDATE settings SET value = ? WHERE key = 'ordering_open'")
-      .run(ordering_open ? 'true' : 'false');
-  }
-  res.json({ ok: true });
-});
-
-// GET /api/admin/export — download Excel
-router.get('/export', auth, async (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders ORDER BY name ASC, submitted_at ASC').all();
-  const allItems = orders.map(o => ({
-    ...o,
-    items: db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id)
-  }));
-
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'SAP Merch App';
-
-  // Sheet 1: All orders detail
-  const wsDetail = wb.addWorksheet('All Orders');
-  wsDetail.columns = [
-    { header: 'Order #', key: 'id', width: 10 },
-    { header: 'Name', key: 'name', width: 22 },
-    { header: 'Email', key: 'email', width: 28 },
-    { header: 'Product', key: 'product_name', width: 28 },
-    { header: 'Gender', key: 'gender', width: 12 },
-    { header: 'Size', key: 'size', width: 10 },
-    { header: 'Qty', key: 'quantity', width: 8 },
-    { header: 'Submitted', key: 'submitted_at', width: 20 },
-    { header: 'Notes', key: 'notes', width: 30 },
-  ];
-  wsDetail.getRow(1).font = { bold: true };
-  wsDetail.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
-  wsDetail.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-
-  for (const order of allItems) {
-    for (const item of order.items) {
-      wsDetail.addRow({
-        id: order.id,
-        name: order.name,
-        email: order.email || '',
-        product_name: item.product_name,
-        gender: item.gender === 'mens' ? 'Mens' : 'Womens',
-        size: item.size,
-        quantity: item.quantity,
-        submitted_at: order.submitted_at,
-        notes: order.notes || '',
-      });
+router.put('/settings', auth, async (req, res) => {
+  try {
+    const { ordering_open } = req.body;
+    if (typeof ordering_open === 'boolean') {
+      await setSetting('ordering_open', ordering_open ? 'true' : 'false');
     }
-  }
-
-  // Sheet 2: Summary by product/gender/size
-  const wsSummary = wb.addWorksheet('Summary');
-  wsSummary.columns = [
-    { header: 'Product', key: 'product', width: 28 },
-    { header: 'Gender', key: 'gender', width: 12 },
-    { header: 'Size', key: 'size', width: 10 },
-    { header: 'Total Qty', key: 'total', width: 12 },
-  ];
-  wsSummary.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF217346' } };
-  wsSummary.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-
-  const summary = db.prepare(`
-    SELECT product_name, gender, size, SUM(quantity) as total
-    FROM order_items
-    GROUP BY product_name, gender, size
-    ORDER BY product_name, gender, size
-  `).all();
-
-  for (const row of summary) {
-    wsSummary.addRow({
-      product: row.product_name,
-      gender: row.gender === 'mens' ? 'Mens' : 'Womens',
-      size: row.size,
-      total: row.total,
-    });
-  }
-
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="sap-merch-orders-${new Date().toISOString().slice(0,10)}.xlsx"`);
-  await wb.xlsx.write(res);
-  res.end();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/admin/stats
-router.get('/stats', auth, (req, res) => {
-  const PRICES = { 'Classic Tee': 20.85, 'Neptune Polo': 29.35 };
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const PRICES = { 'Classic Tee': 20.85, 'Neptune Polo': 29.35 };
+    const totalOrders = (await query('SELECT COUNT(*) as count FROM orders')).rows[0].count;
+    const totalItems  = (await query('SELECT COALESCE(SUM(quantity),0) as count FROM order_items')).rows[0].count;
+    const byProductRaw = (await query(
+      'SELECT product_name, SUM(quantity) as total FROM order_items GROUP BY product_name'
+    )).rows;
+    const byProduct = byProductRaw.map(p => ({
+      ...p,
+      total:       Number(p.total),
+      unit_price:  PRICES[p.product_name] ?? 0,
+      total_value: (PRICES[p.product_name] ?? 0) * Number(p.total),
+    }));
+    const totalValue = byProduct.reduce((s, p) => s + p.total_value, 0);
+    res.json({ totalOrders: Number(totalOrders), totalItems: Number(totalItems), byProduct, totalValue });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-  const totalOrders = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
-  const totalItems  = db.prepare('SELECT COALESCE(SUM(quantity),0) as count FROM order_items').get().count;
-  const byProduct   = db.prepare(`
-    SELECT product_name, SUM(quantity) as total FROM order_items GROUP BY product_name
-  `).all().map(p => ({
-    ...p,
-    unit_price:  PRICES[p.product_name] ?? 0,
-    total_value: (PRICES[p.product_name] ?? 0) * p.total,
-  }));
+// GET /api/admin/export
+router.get('/export', auth, async (req, res) => {
+  try {
+    const orders = (await query('SELECT * FROM orders ORDER BY name ASC, submitted_at ASC')).rows;
+    const allItems = await Promise.all(orders.map(async o => ({
+      ...o,
+      items: (await query('SELECT * FROM order_items WHERE order_id = $1', [o.id])).rows,
+    })));
 
-  const totalValue = byProduct.reduce((sum, p) => sum + p.total_value, 0);
-  res.json({ totalOrders, totalItems, byProduct, totalValue });
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'SAP Merch App';
+
+    const wsDetail = wb.addWorksheet('All Orders');
+    wsDetail.columns = [
+      { header: 'Order #',   key: 'id',           width: 10 },
+      { header: 'Email',     key: 'email',         width: 30 },
+      { header: 'Name',      key: 'name',          width: 22 },
+      { header: 'Product',   key: 'product_name',  width: 28 },
+      { header: 'Gender',    key: 'gender',        width: 12 },
+      { header: 'Size',      key: 'size',          width: 10 },
+      { header: 'Qty',       key: 'quantity',      width: 8  },
+      { header: 'Submitted', key: 'submitted_at',  width: 20 },
+      { header: 'Notes',     key: 'notes',         width: 30 },
+    ];
+    wsDetail.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
+    wsDetail.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    for (const order of allItems) {
+      for (const item of order.items) {
+        wsDetail.addRow({
+          id: order.id, email: order.email || '', name: order.name,
+          product_name: item.product_name,
+          gender: item.gender === 'mens' ? 'Mens' : 'Womens',
+          size: item.size, quantity: item.quantity,
+          submitted_at: order.submitted_at, notes: order.notes || '',
+        });
+      }
+    }
+
+    const wsSummary = wb.addWorksheet('Summary');
+    wsSummary.columns = [
+      { header: 'Product',   key: 'product',  width: 28 },
+      { header: 'Gender',    key: 'gender',   width: 12 },
+      { header: 'Size',      key: 'size',     width: 10 },
+      { header: 'Total Qty', key: 'total',    width: 12 },
+    ];
+    wsSummary.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF217346' } };
+    wsSummary.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    const summary = (await query(
+      `SELECT product_name, gender, size, SUM(quantity) as total
+       FROM order_items GROUP BY product_name, gender, size
+       ORDER BY product_name, gender, size`
+    )).rows;
+    for (const row of summary) {
+      wsSummary.addRow({
+        product: row.product_name,
+        gender: row.gender === 'mens' ? 'Mens' : 'Womens',
+        size: row.size, total: Number(row.total),
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="sap-merch-orders-${new Date().toISOString().slice(0,10)}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

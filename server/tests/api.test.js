@@ -1,13 +1,10 @@
 const request    = require('supertest');
 const app        = require('../server');
-const db         = require('../database');
+const conn       = require('../database');
+const db         = conn.db; // SQLite instance (tests only)
 
-// Seed test settings (in-memory DB starts empty)
+// Seed test settings
 beforeAll(() => {
-  db.exec(`
-    INSERT OR IGNORE INTO settings VALUES ('ordering_open', 'true');
-    INSERT OR IGNORE INTO settings VALUES ('admin_password', 'testpass');
-  `);
   db.prepare("UPDATE settings SET value='testpass' WHERE key='admin_password'").run();
 });
 
