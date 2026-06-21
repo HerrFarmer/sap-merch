@@ -19,6 +19,7 @@ export default function App() {
   const [step, setStep] = useState('name') // 'name' | 'order' | 'done'
   const [prevOrders, setPrevOrders] = useState([])
   const [loadingLookup, setLoadingLookup] = useState(false)
+  const [editingOrderId, setEditingOrderId] = useState(null)
   const [nameMismatch, setNameMismatch] = useState(null) // { storedName, newName, pendingData }
 
   async function handleNameSubmit(e) {
