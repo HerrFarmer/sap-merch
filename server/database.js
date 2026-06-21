@@ -29,8 +29,13 @@ if (process.env.NODE_ENV === 'test') {
   `);
   module.exports = { type: 'sqlite', db };
 } else {
+  // Use separate params to avoid URL-encoding issues with special chars in password
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    host:     process.env.DB_HOST     || new URL(process.env.DATABASE_URL).hostname,
+    port:     process.env.DB_PORT     || new URL(process.env.DATABASE_URL).port || 5432,
+    database: process.env.DB_NAME     || new URL(process.env.DATABASE_URL).pathname.slice(1),
+    user:     process.env.DB_USER     || new URL(process.env.DATABASE_URL).username,
+    password: process.env.DB_PASSWORD || decodeURIComponent(new URL(process.env.DATABASE_URL).password),
     ssl: { rejectUnauthorized: false },
   });
   module.exports = { type: 'pg', pool };
