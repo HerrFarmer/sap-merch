@@ -15,7 +15,7 @@ async function apiFetch(path, options = {}) {
 
 export const api = {
   getSettings:    ()         => apiFetch('/api/orders/settings'),
-  lookupOrders:   (name)     => apiFetch(`/api/orders/lookup?name=${encodeURIComponent(name)}`),
+  lookupOrders:   (name, email) => apiFetch(`/api/orders/lookup?${email ? `email=${encodeURIComponent(email)}` : `name=${encodeURIComponent(name)}`}`),
   getOrder:       (id)       => apiFetch(`/api/orders/${id}`),
   createOrder:    (data)     => apiFetch('/api/orders', { method: 'POST', body: data }),
   updateOrder:    (id, data) => apiFetch(`/api/orders/${id}`, { method: 'PUT', body: data }),

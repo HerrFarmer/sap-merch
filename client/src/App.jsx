@@ -26,22 +26,55 @@ export default function App() {
     const trimmedName  = nameInput.trim()
     const trimmedEmail = emailInput.trim().toLowerCase()
     if (!trimmedName) return
+
+    // Validate @sap.com
     if (!trimmedEmail.endsWith('@sap.com')) {
-      setEmailError('Email must end with @sap.com')
+      setEmailError('Email address must end with @sap.com')
       return
     }
+    // Basic format check
+    const emailRegex = /^[^\s@]+@sap\.com$/
+    if (!emailRegex.test(trimmedEmail)) {
+      setEmailError('Please enter a valid @sap.com email address')
+      return
+    }
+
     setEmailError('')
-    setName(trimmedName)
-    setEmail(trimmedEmail)
     setLoadingLookup(true)
     try {
-      const [settings, existing] = await Promise.all([
+      const [settings, existingByEmail] = await Promise.all([
         api.getSettings(),
-        api.lookupOrders(trimmedName),
+        api.lookupOrders(null, trimmedEmail),
       ])
       setOrderingOpen(settings.ordering_open)
-      setPrevOrders(existing)
-    } catch {}
+      setName(trimmedName)
+      setEmail(trimmedEmail)
+
+      if (existingByEmail.length > 0) {
+        // Existing user — auto-load their most recent order into the cart
+        const latest = existingByEmail[0]
+        setOrderItems(latest.items.map(i => ({
+          product_id: i.product_id,
+          product_name: i.product_name,
+          gender: i.gender,
+          size: i.size,
+          quantity: i.quantity,
+        })))
+        setNotes(latest.notes || '')
+        setEditingOrderId(latest.id)
+        setPrevOrders(existingByEmail.length > 1 ? existingByEmail.slice(1) : [])
+      } else {
+        // New user
+        setOrderItems([])
+        setNotes('')
+        setEditingOrderId(null)
+        setPrevOrders([])
+      }
+    } catch (err) {
+      setEmailError('Something went wrong. Please try again.')
+      setLoadingLookup(false)
+      return
+    }
     setLoadingLookup(false)
     setStep('order')
   }
@@ -183,33 +216,23 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
                   <h2 style={{ fontSize: 22, fontWeight: 700 }}>Hi, {name}! 👋</h2>
-                  <p style={{ fontSize: 14, color: '#666', marginTop: 4 }}>{email}</p>
-                  <p style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
-                    {editingOrderId ? `Editing Order #${editingOrderId}` : 'Select your items below'}
+                  <p style={{ fontSize: 14, color: '#666', marginTop: 2 }}>{email}</p>
+                  <p style={{ fontSize: 14, color: editingOrderId ? '#0070c0' : '#666', marginTop: 2, fontWeight: editingOrderId ? 600 : 400 }}>
+                    {editingOrderId ? `✏️ Editing your existing order #${editingOrderId}` : 'New order — select your items below'}
                   </p>
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={restart}>← Change name</button>
+                <button className="btn btn-secondary btn-sm" onClick={restart}>← Back</button>
               </div>
 
-              {/* Previous orders lookup */}
-              {prevOrders.length > 0 && (
-                <div className="lookup-section">
-                  <h3>📋 You have {prevOrders.length} existing order{prevOrders.length > 1 ? 's' : ''}</h3>
-                  <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
-                    Click an order to load and edit it, or scroll down to place a new one.
+              {/* Welcome back notice for existing users */}
+              {editingOrderId && (
+                <div style={{ background: '#e8f0fe', border: '1.5px solid #c3d4fb', borderRadius: 10, padding: '14px 18px', marginBottom: 24 }}>
+                  <p style={{ fontSize: 14, color: '#1a56db', fontWeight: 600, marginBottom: 4 }}>
+                    👋 Welcome back! Your previous order has been loaded.
                   </p>
-                  {prevOrders.map(o => (
-                    <div key={o.id} className="prev-order-card" onClick={() => handleLoadOrder(o)}>
-                      <h4>Order #{o.id} — {o.items.length} item type{o.items.length !== 1 ? 's' : ''}</h4>
-                      <p>
-                        {o.items.map(i => `${i.product_name} (${i.gender === 'mens' ? 'Mens' : 'Womens'} ${i.size} × ${i.quantity})`).join(', ')}
-                        {' · '}Submitted {new Date(o.submitted_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
-                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setPrevOrders([])}>
-                    + Place a new order instead
-                  </button>
+                  <p style={{ fontSize: 13, color: '#3a5fc8' }}>
+                    You can update your selections below. Your changes will replace your existing order when you click Save.
+                  </p>
                 </div>
               )}
 
@@ -226,30 +249,37 @@ export default function App() {
                 You can order one or both shirt types. Select gender, size and quantity, then click "Add to Order".
               </p>
 
-              <div className="products-grid">
-                {PRODUCTS.map(product => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    orderItems={orderItems}
-                    onAddItem={addItem}
-                    onRemoveItem={removeItem}
-                    disabled={!orderingOpen}
-                  />
-                ))}
-              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
+                <div>
+                  <div className="products-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                    {PRODUCTS.map(product => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        orderItems={orderItems}
+                        onAddItem={addItem}
+                        onRemoveItem={removeItem}
+                        disabled={!orderingOpen}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-              <OrderSummary
-                items={orderItems}
-                name={name}
-                notes={notes}
-                onNotesChange={setNotes}
-                onRemoveItem={removeItem}
-                onSubmit={handleSubmit}
-                submitting={submitting}
-                disabled={!orderingOpen}
-                isEdit={!!editingOrderId}
-              />
+                {/* Sticky cart */}
+                <div style={{ position: 'sticky', top: 20 }}>
+                  <OrderSummary
+                    items={orderItems}
+                    name={name}
+                    notes={notes}
+                    onNotesChange={setNotes}
+                    onRemoveItem={removeItem}
+                    onSubmit={handleSubmit}
+                    submitting={submitting}
+                    disabled={!orderingOpen}
+                    isEdit={!!editingOrderId}
+                  />
+                </div>
+              </div>
             </div>
           )}
 

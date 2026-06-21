@@ -10,11 +10,19 @@ router.get('/settings', (req, res) => {
 
 // GET /api/orders/lookup?name=John — find orders by name
 router.get('/lookup', (req, res) => {
-  const { name } = req.query;
-  if (!name) return res.status(400).json({ error: 'name required' });
-  const orders = db.prepare(
-    'SELECT * FROM orders WHERE LOWER(name) = LOWER(?) ORDER BY submitted_at DESC'
-  ).all(name.trim());
+  const { name, email } = req.query;
+  let orders;
+  if (email) {
+    orders = db.prepare(
+      'SELECT * FROM orders WHERE LOWER(email) = LOWER(?) ORDER BY submitted_at DESC'
+    ).all(email.trim());
+  } else if (name) {
+    orders = db.prepare(
+      'SELECT * FROM orders WHERE LOWER(name) = LOWER(?) ORDER BY submitted_at DESC'
+    ).all(name.trim());
+  } else {
+    return res.status(400).json({ error: 'name or email required' });
+  }
   const result = orders.map(o => ({
     ...o,
     items: db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id)
