@@ -146,8 +146,8 @@ export default function AdminPage() {
                       {stats.byProduct.map(p => (
                         <div key={p.product_name} style={{ fontSize: 13, marginBottom: 6 }}>
                           <div style={{ fontWeight: 700, color: '#0070c0' }}>{p.product_name}</div>
-                          <div style={{ color: '#444' }}>{p.total} shirts · <strong>${p.total_value.toFixed(2)}</strong></div>
-                          <div style={{ fontSize: 11, color: '#999' }}>${p.unit_price.toFixed(2)} each</div>
+                          <div style={{ color: '#444' }}>{p.total} shirts · <strong>${(p.total_value ?? 0).toFixed(2)}</strong></div>
+                          <div style={{ fontSize: 11, color: '#999' }}>${(p.unit_price ?? 0).toFixed(2)} each</div>
                         </div>
                       ))}
                       {stats.byProduct.length === 0 && <span style={{ fontSize: 14, color: '#999' }}>—</span>}

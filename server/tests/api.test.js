@@ -169,7 +169,12 @@ describe('Admin', () => {
     expect(res.headers['content-type']).toContain('spreadsheetml');
   });
 
-  test('GET /api/admin/stats returns totals', async () => {
+  test('GET /api/admin/stats returns totals with value fields', async () => {
+    // Create an order so byProduct is populated
+    await request(app)
+      .post('/api/orders')
+      .send({ name: 'Stats User', email: 'stats@sap.com', items: [sampleItem] });
+
     const res = await request(app).get('/api/admin/stats').set(adminHeaders);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('totalOrders');
@@ -177,5 +182,17 @@ describe('Admin', () => {
     expect(res.body).toHaveProperty('totalValue');
     expect(res.body).toHaveProperty('byProduct');
     expect(typeof res.body.totalValue).toBe('number');
+
+    // Each byProduct entry must have unit_price and total_value defined (not undefined)
+    res.body.byProduct.forEach(p => {
+      expect(p.unit_price).toBeDefined();
+      expect(p.total_value).toBeDefined();
+      expect(typeof p.unit_price).toBe('number');
+      expect(typeof p.total_value).toBe('number');
+    });
+
+    // totalValue should equal sum of byProduct total_values
+    const expected = res.body.byProduct.reduce((s, p) => s + p.total_value, 0);
+    expect(res.body.totalValue).toBeCloseTo(expected, 2);
   });
 });
