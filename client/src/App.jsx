@@ -6,7 +6,10 @@ import OrderSummary from './components/OrderSummary'
 
 export default function App() {
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [nameInput, setNameInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [orderItems, setOrderItems] = useState([])
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -20,14 +23,21 @@ export default function App() {
 
   async function handleNameSubmit(e) {
     e.preventDefault()
-    const trimmed = nameInput.trim()
-    if (!trimmed) return
-    setName(trimmed)
+    const trimmedName  = nameInput.trim()
+    const trimmedEmail = emailInput.trim().toLowerCase()
+    if (!trimmedName) return
+    if (!trimmedEmail.endsWith('@sap.com')) {
+      setEmailError('Email must end with @sap.com')
+      return
+    }
+    setEmailError('')
+    setName(trimmedName)
+    setEmail(trimmedEmail)
     setLoadingLookup(true)
     try {
       const [settings, existing] = await Promise.all([
         api.getSettings(),
-        api.lookupOrders(trimmed),
+        api.lookupOrders(trimmedName),
       ])
       setOrderingOpen(settings.ordering_open)
       setPrevOrders(existing)
@@ -45,6 +55,7 @@ export default function App() {
       quantity: i.quantity,
     })))
     setNotes(order.notes || '')
+    setEmail(order.email || '')
     setEditingOrderId(order.id)
     setPrevOrders([])
   }
@@ -75,7 +86,7 @@ export default function App() {
     setError('')
     setSubmitting(true)
     try {
-      const payload = { name, notes, items: orderItems }
+      const payload = { name, email, notes, items: orderItems }
       let result
       if (editingOrderId) {
         result = await api.updateOrder(editingOrderId, payload)
@@ -100,7 +111,8 @@ export default function App() {
   }
 
   function restart() {
-    setName(''); setNameInput(''); setOrderItems([]); setNotes('')
+    setName(''); setNameInput(''); setEmail(''); setEmailInput(''); setEmailError('')
+    setOrderItems([]); setNotes('')
     setSubmitted(null); setEditingOrderId(null); setError('')
     setPrevOrders([]); setStep('name')
   }
@@ -133,9 +145,9 @@ export default function App() {
             <div>
               <div className="name-card">
                 <h2>Welcome! Let's get you started.</h2>
-                <p>Enter your name to begin your order. You can also use this to look up and edit a previous order.</p>
+                <p>Enter your name and SAP email to begin your order.</p>
                 <form onSubmit={handleNameSubmit}>
-                  <div className="input-group">
+                  <div style={{ marginBottom: 12 }}>
                     <input
                       type="text"
                       placeholder="Your full name"
@@ -143,11 +155,23 @@ export default function App() {
                       onChange={e => setNameInput(e.target.value)}
                       autoFocus
                       required
+                      style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #dde2ea', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
                     />
-                    <button type="submit" className="btn btn-primary" disabled={loadingLookup}>
-                      {loadingLookup ? 'Loading…' : 'Continue →'}
-                    </button>
                   </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <input
+                      type="email"
+                      placeholder="your.name@sap.com"
+                      value={emailInput}
+                      onChange={e => { setEmailInput(e.target.value); setEmailError('') }}
+                      required
+                      style={{ width: '100%', padding: '10px 14px', border: `1.5px solid ${emailError ? '#dc3545' : '#dde2ea'}`, borderRadius: 8, fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
+                    />
+                    {emailError && <p style={{ color: '#dc3545', fontSize: 13, marginTop: 5 }}>{emailError}</p>}
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loadingLookup}>
+                    {loadingLookup ? 'Loading…' : 'Continue →'}
+                  </button>
                 </form>
               </div>
             </div>
@@ -159,6 +183,7 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
                   <h2 style={{ fontSize: 22, fontWeight: 700 }}>Hi, {name}! 👋</h2>
+                  <p style={{ fontSize: 14, color: '#666', marginTop: 4 }}>{email}</p>
                   <p style={{ fontSize: 14, color: '#666', marginTop: 4 }}>
                     {editingOrderId ? `Editing Order #${editingOrderId}` : 'Select your items below'}
                   </p>
