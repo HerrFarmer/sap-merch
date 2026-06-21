@@ -15,5 +15,10 @@ export default defineConfig({
         manualChunks: undefined,
       }
     }
-  }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/tests/setup.js'],
+  },
 })

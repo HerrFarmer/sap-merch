@@ -1,0 +1,12 @@
+{
+  "name": "sap-merch",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "npm test --prefix server && npm test --prefix client",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.0"
+  }
+}

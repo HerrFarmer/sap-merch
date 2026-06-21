@@ -1,0 +1,23 @@
+#!/bin/sh
+echo "🧪 Running tests before push..."
+echo ""
+
+echo "── Server tests ──────────────────────────────"
+cd server && npm test
+SERVER_RESULT=$?
+cd ..
+
+echo ""
+echo "── Client tests ──────────────────────────────"
+cd client && npm test
+CLIENT_RESULT=$?
+cd ..
+
+echo ""
+if [ $SERVER_RESULT -ne 0 ] || [ $CLIENT_RESULT -ne 0 ]; then
+  echo "❌ Tests failed. Push blocked."
+  echo "   Fix the failing tests and try again."
+  exit 1
+fi
+
+echo "✅ All tests passed. Pushing..."

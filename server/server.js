@@ -1,14 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const db = require('./database');
 const ordersRouter = require('./routes/orders');
 const adminRouter = require('./routes/admin');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// Allow requests from any origin (lock down after deployment)
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : [
@@ -29,17 +26,15 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// Serve product images
 app.use('/images', express.static(path.join(__dirname, '..', 'images')));
-
-// Routes
 app.use('/api/orders', ordersRouter);
 app.use('/api/admin', adminRouter);
-
-// Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// Only bind to port when run directly (not when imported by tests)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+}
+
+module.exports = app;
